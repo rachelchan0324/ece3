@@ -9,7 +9,7 @@ uint16_t sensorMinimums[8] = {534, 558, 606, 582, 511, 558, 606, 630}; // rachel
 // uint16_t sensorMaximums[8] = {1611, 1872, 2465, 1920, 1398, 1943, 2180, 2299}; // rachel's bot (OG)
 int sensorMaximums[8] = {2142, 2500, 2500, 2326, 1981, 2465, 2500, 2500}; // rachel's bot - recalibrated
 // uint16_t sensorMaximums[8] = {2500, 2500, 2500, 2500, 2500}; // sophia's bot - recalibrated
-int32_t sensorWeights[8] = {-15, -14, -12, -8, 8, 12, 14, 15};
+int32_t sensorWeights[8] = {-8, -4, -2, -1, 1, 2, 4, 8};
 
 // PIN VARIABLES
 const int left_nslp_pin=31; // nslp ==> awake & ready for PWM
@@ -20,17 +20,13 @@ const int right_dir_pin = 30;
 const int right_nslp_pin = 11;
 const int right_pwm_pin = 39;
 
-// PID VARIABLES
+// CODE VARIABLES
 float kp = 0.05;
-
 float kd = 0.035;
 int32_t prev_error;
-
 int32_t base_speed = 30;
-
 bool first_run = true;
-
-bool phantom_cross = false; // has not approached phantomcross yet
+int32_t horiz_black_line = 0; 
 
 void setup() {
   ECE3_Init();
@@ -53,39 +49,62 @@ void setup() {
 
 void loop() {
   ECE3_read_IR(sensorValues);
+  
+  /**  
   int32_t error = 0;
   int normalizedValue;
-  bool horiz_black_line = true;
+  bool isBlackLine = true;
 
+  // calculate error
   for (unsigned char i = 0; i < 8; i++) {
     // normalization of sensorValues
     if (sensorValues[i] < sensorMinimums[i])
       sensorMinimums[i] = sensorValues[i];
     if (sensorValues[i] > sensorMaximums[i])
       sensorMaximums[i] = sensorValues[i];
-    // phantom cross + turnaround check
-    if (abs(sensorValues[i] - sensorMaximums[i]) > sensorMaximums[i] * 0.2))
-      horiz_black_line = false;
+    // phantom cross + turnaround check: within 20% of maximums
+    if (abs(sensorValues[i] - sensorMaximums[i]) > sensorMaximums[i] * 0.1)
+      isBlackLine = false;
+
     normalizedValue = sensorValues[i];
     normalizedValue -= sensorMinimums[i];
     normalizedValue *= 1000;
     normalizedValue /= (sensorMaximums[i] - sensorMinimums[i]);
-
     error += (normalizedValue * sensorWeights[i]);
   }
-  error /= 24;
+  error /= 4;
+
+  if (isBlackLine)
+    horiz_black_line += 1;
+    Serial.print("Black Line ");
+    Serial.print(horiz_black_line);
+    Serial.print("\n");
 
   if (horiz_black_line)
-  {
-    if (phantom_cross)
-      digitalWrite(left_dir_pin, HIGH); // one motor forward
-      digitalWrite(right_dir_pin, LOW); // other motor backward
-      analogWrite(left_pwm_pin, base_speed);
-      analogWrite(right_pwm_pin, base_speed);
-    else
-      phantom_cross = true;
-  }
-    
+  { **/
+  
+      int left_encoder_count = 0;
+      int right_encoder_count = 0;
+      resetEncoderCount_left();
+      resetEncoderCount_right();
+
+      while(abs(left_encoder_count) < 375)
+      {
+        analogWrite(left_pwm_pin, base_speed);
+        analogWrite(right_pwm_pin, base_speed);
+        digitalWrite(left_dir_pin, HIGH); // one motor forward
+        digitalWrite(right_dir_pin, LOW); // other motor backward
+        left_encoder_count = getEncoderCount_left();
+        right_encoder_count = getEncoderCount_right();
+      }
+
+      analogWrite(left_pwm_pin, 0);
+      analogWrite(right_pwm_pin, 0);
+      while(true)
+        delay(10000);
+
+      // digitalWrite(left_dir_pin, LOW); // back to forward
+  /** }
   
   if(first_run)
   {
@@ -105,4 +124,5 @@ void loop() {
 
   prev_error = error;
   first_run = false;
+  **/
 }
