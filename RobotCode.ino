@@ -16,15 +16,19 @@ const int right_nslp_pin = 11;
 const int right_pwm_pin = 39;
 
 // CODE VARIABLES
-float kp = 0.04;
-float kd = 0.05;
+const float kp = 0.04;
+const float loop_kp = 0.2;
+const float kd = 0.05;
 float prev_error;
 const int base_speed = 37;
+bool first_run = true;
+int encoder_count = 0;
+
 bool loop_done = false;
+int32_t time_since_loop;
 bool arch_done = false;
 bool harpin_done = false;
 bool turnaround_done = false;
-int encoder_count = 0;
 
 void setup() {
   ECE3_Init();
@@ -51,22 +55,23 @@ void setup() {
 void loop() {
   float error = calculateError();
 
-  if(error == 0 && !loop_done) // loop
+  if(error == 0 and !loop_done)
   {
     loopTurn();
+    loop_done = true;
+    time_since_loop = millis(); 
     return;
   }
-  elif (error == 0 && loop_done && !turnaround_done) // turnaround 
-  {
-    turnaround();
-    return; // needs to get new sensorValues
-  }
+  // if(error = 0)
+  // {
+  //   turnaround();
+  //   return; // needs to get new sensorValues
+  // }
   
   if(first_run) // relies only on kp
   {
-      float proportional_term = error * kp;
-      analogWrite(left_pwm_pin, base_speed - proportional_term);
-      analogWrite(right_pwm_pin, base_speed + proportional_term);
+      analogWrite(left_pwm_pin, base_speed - error * kp);
+      analogWrite(right_pwm_pin, base_speed + error * kp);
   }
   else
   {
@@ -74,8 +79,20 @@ void loop() {
     float derivative = error - prev_error;
     float derivative_term = derivative * kd;
 
-    analogWrite(left_pwm_pin, base_speed - proportional_term - derivative_term);
-    analogWrite(right_pwm_pin, base_speed + proportional_term + derivative_term);
+    int left_pwm = base_speed - proportional_term - derivative_term;
+    int right_pwm = base_speed + proportional_term + derivative_term;
+
+    // arch check
+    
+    if(millis() - time_since_loop >= 3000 && !arch_done && loop_done)
+    {
+      arch();
+      arch_done = true;
+      return;
+    }
+
+    analogWrite(left_pwm_pin, left_pwm);
+    analogWrite(right_pwm_pin, right_pwm);
   }
   encoder_count = int((abs(getEncoderCount_left()) + abs(getEncoderCount_right())) / 2.0); // update encoder counts
   prev_error = error; 
@@ -129,21 +146,45 @@ void loopTurn()
     analogWrite(right_pwm_pin, base_speed);
     encoder_count = int((abs(getEncoderCount_left()) + abs(getEncoderCount_right())) / 2.0); // update encoder counts
   }
-
+  digitalWrite(right_dir_pin, HIGH);  // Right wheel backward
+  float error = calculateError();
   starting_encoder_count = encoder_count;
-  // perform hardcoded loop
   while(abs(encoder_count - starting_encoder_count) < 550)
   {
-    analogWrite(left_pwm_pin, 125);
-    analogWrite(right_pwm_pin, 0.1);
+    analogWrite(left_pwm_pin, constrain(base_speed - error * loop_kp, 0, 255));
+    analogWrite(right_pwm_pin, constrain(base_speed + error * loop_kp, 0, 255));
     delay(100);
 
     encoder_count = int((abs(getEncoderCount_left()) + abs(getEncoderCount_right())) / 2.0); // update encoder counts
 
     analogWrite(left_pwm_pin, 0);
     analogWrite(right_pwm_pin, 0);
-    delay(100);  // Wait 1 second - adjust time as needed
+    delay(100); 
+    error = calculateError();  
   }
-  prev_error = calculateError();
-  loop_done = true;
+  digitalWrite(right_dir_pin, LOW);  // Right wheel backward
+}
+
+void arch()
+{
+  analogWrite(left_pwm_pin, 0);
+  analogWrite(right_pwm_pin, 0);
+  delay(1500); 
+
+  float error = calculateError();
+  int starting_encoder_count = encoder_count;
+  while(abs(encoder_count - starting_encoder_count) < 200)
+  {
+    analogWrite(left_pwm_pin, constrain(base_speed - error * loop_kp, 0, 20));
+    analogWrite(right_pwm_pin, constrain(base_speed + error * loop_kp, 0, 255));
+    delay(10);
+
+    encoder_count = int((abs(getEncoderCount_left()) + abs(getEncoderCount_right())) / 2.0); // update encoder counts
+
+    analogWrite(left_pwm_pin, 0);
+    analogWrite(right_pwm_pin, 0);
+    delay(10); 
+    error = calculateError();
+  }
+  digitalWrite(right_dir_pin, LOW);
 }
