@@ -159,7 +159,7 @@ void loopTurn()
 
     analogWrite(left_pwm_pin, 0);
     analogWrite(right_pwm_pin, 0);
-    delay(100); 
+    delay(50);
     error = calculateError();  
   }
   digitalWrite(right_dir_pin, LOW);  // Right wheel backward
@@ -167,23 +167,19 @@ void loopTurn()
 
 void arch()
 {
-  analogWrite(left_pwm_pin, 0);
-  analogWrite(right_pwm_pin, 0);
-  delay(1500); 
-
   float error = calculateError();
   int starting_encoder_count = encoder_count;
   while(abs(encoder_count - starting_encoder_count) < 200)
   {
     analogWrite(left_pwm_pin, constrain(base_speed - error * loop_kp, 0, 20));
     analogWrite(right_pwm_pin, constrain(base_speed + error * loop_kp, 0, 255));
-    delay(10);
+    delay(100);
 
     encoder_count = int((abs(getEncoderCount_left()) + abs(getEncoderCount_right())) / 2.0); // update encoder counts
 
     analogWrite(left_pwm_pin, 0);
     analogWrite(right_pwm_pin, 0);
-    delay(10); 
+    delay(100); 
     error = calculateError();
   }
   digitalWrite(right_dir_pin, LOW);
